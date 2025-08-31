@@ -3,13 +3,15 @@
     "step": {
       "user": {
         "title": "Configure Boardlink Curtain Control",
-        "description": "Please configure your IR curtain controller",
+        "description": "Please configure your IR curtain controller. You can use Broadlink devices to send IR codes.",
         "data": {
           "name": "Curtain Name",
           "open_code": "Open IR Code",
           "close_code": "Close IR Code",
           "pause_code": "Pause IR Code",
-          "close_time": "Full Close Time (seconds)"
+          "close_time": "Full Close Time (seconds)",
+          "broadlink_device": "Broadlink Device (optional)",
+          "broadlink_type": "Broadlink Device Type"
         }
       }
     },

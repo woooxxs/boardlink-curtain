@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "documentation": "https://github.com/woooxxs/boardlink-curtain",
   "issue_tracker": "https://github.com/woooxxs/boardlink-curtain/issues",
-  "dependencies": [],
+  "dependencies": ["broadlink"],
   "codeowners": ["@woooxxs"],
-  "requirements": [],
+  "requirements": ["broadlink==0.18.3"],
   "config_flow": true,
   "iot_class": "local_polling",
   "logo": "https://raw.githubusercontent.com/woooxxs/boardlink-curtain/refs/heads/master/logo.svg"

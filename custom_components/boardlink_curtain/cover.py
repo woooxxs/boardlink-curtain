@@ -17,6 +17,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    CONF_BROADLINK_DEVICE,
+    CONF_BROADLINK_TYPE,
     CONF_CLOSE_CODE,
     CONF_CLOSE_TIME,
     CONF_OPEN_CODE,
@@ -43,7 +45,10 @@ async def async_setup_entry(
                 close_code=data[CONF_CLOSE_CODE],
                 pause_code=data[CONF_PAUSE_CODE],
                 close_time=data.get(CONF_CLOSE_TIME, 30),
+                broadlink_device=data.get(CONF_BROADLINK_DEVICE),
+                broadlink_type=data.get(CONF_BROADLINK_TYPE, "RM_MINI3"),
                 unique_id=config_entry.entry_id,
+                hass=hass,
             )
         ]
     )
@@ -66,7 +71,10 @@ class BoardlinkCurtain(CoverEntity, RestoreEntity):
         close_code: str,
         pause_code: str,
         close_time: int,
+        broadlink_device: str,
+        broadlink_type: str,
         unique_id: str,
+        hass: HomeAssistant,
     ) -> None:
         """Initialize the curtain."""
         self._attr_name = name
@@ -75,6 +83,9 @@ class BoardlinkCurtain(CoverEntity, RestoreEntity):
         self._close_code = close_code
         self._pause_code = pause_code
         self._close_time = close_time  # 完全关闭所需时间（秒）
+        self._broadlink_device = broadlink_device
+        self._broadlink_type = broadlink_type
+        self._hass = hass
         
         # 0% = 完全开启, 100% = 完全关闭
         self._attr_current_cover_position = 0
@@ -190,14 +201,29 @@ class BoardlinkCurtain(CoverEntity, RestoreEntity):
         )
 
     async def _send_ir_code(self, code: str) -> None:
-        """发送红外码的模拟函数.
-        
-        在实际应用中，这里应该实现真正的红外码发送逻辑，
-        比如通过Broadlink设备或其他IR发射器。
-        """
-        _LOGGER.debug(f"Sending IR code: {code}")
-        # 模拟发送延迟
-        await asyncio.sleep(0.5)
+        """发送红外码到Broadlink设备."""
+        try:
+            # 尝试通过Broadlink服务发送红外码
+            if self._broadlink_device:
+                service_data = {
+                    "entity_id": f"remote.{self._broadlink_device}",
+                    "command": code
+                }
+                
+                await self._hass.services.async_call(
+                    "remote", "send_command", service_data, blocking=True
+                )
+                _LOGGER.info("Sent IR code via Broadlink: %s", code)
+            else:
+                # 如果没有配置Broadlink设备，记录日志
+                _LOGGER.warning("No Broadlink device configured, simulating IR code: %s", code)
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            _LOGGER.error("Failed to send IR code via Broadlink: %s", e)
+            # 回退到模拟模式
+            _LOGGER.debug("Falling back to simulation for IR code: %s", code)
+            await asyncio.sleep(0.5)
 
     async def _simulate_movement(self, target_position: int, duration: float) -> None:
         """模拟窗帘移动过程."""

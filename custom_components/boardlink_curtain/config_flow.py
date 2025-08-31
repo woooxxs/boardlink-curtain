@@ -10,14 +10,18 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_BROADLINK_DEVICE,
+    CONF_BROADLINK_TYPE,
     CONF_CLOSE_CODE,
+    CONF_CLOSE_TIME,
     CONF_OPEN_CODE,
     CONF_PAUSE_CODE,
-    CONF_CLOSE_TIME,
     DEFAULT_CLOSE_TIME,
     DOMAIN,
+    BROADLINK_TYPES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +33,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_CLOSE_CODE): str,
         vol.Required(CONF_PAUSE_CODE): str,
         vol.Optional(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): vol.Coerce(int),
+        vol.Optional(CONF_BROADLINK_DEVICE): str,
+        vol.Optional(CONF_BROADLINK_TYPE, default="RM_MINI3"): vol.In(BROADLINK_TYPES),
     }
 )
 
@@ -62,6 +68,40 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=info["title"], data=user_input)
 
+        # 获取可用的Broadlink设备
+        device_registry = dr.async_get(self.hass)
+        broadlink_devices = []
+        for device in device_registry.devices.values():
+            if any("broadlink" in str(identifier).lower() for identifier in device.identifiers):
+                device_name = next(iter(device.identifiers))[1] if device.identifiers else str(device.id)
+                broadlink_devices.append(device_name)
+
+        # 如果没有找到Broadlink设备，提供手动输入选项
+        if not broadlink_devices:
+            schema = vol.Schema(
+                {
+                    vol.Required(CONF_NAME): str,
+                    vol.Required(CONF_OPEN_CODE): str,
+                    vol.Required(CONF_CLOSE_CODE): str,
+                    vol.Required(CONF_PAUSE_CODE): str,
+                    vol.Optional(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): vol.Coerce(int),
+                    vol.Optional(CONF_BROADLINK_DEVICE): str,
+                    vol.Optional(CONF_BROADLINK_TYPE, default="RM_MINI3"): vol.In(BROADLINK_TYPES),
+                }
+            )
+        else:
+            schema = vol.Schema(
+                {
+                    vol.Required(CONF_NAME): str,
+                    vol.Required(CONF_OPEN_CODE): str,
+                    vol.Required(CONF_CLOSE_CODE): str,
+                    vol.Required(CONF_PAUSE_CODE): str,
+                    vol.Optional(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): vol.Coerce(int),
+                    vol.Optional(CONF_BROADLINK_DEVICE): vol.In(broadlink_devices),
+                    vol.Optional(CONF_BROADLINK_TYPE, default="RM_MINI3"): vol.In(BROADLINK_TYPES),
+                }
+            )
+
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="user", data_schema=schema, errors=errors
         )

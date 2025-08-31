@@ -3,13 +3,15 @@
     "step": {
       "user": {
         "title": "配置博联窗帘控制",
-        "description": "请配置您的红外窗帘控制器",
+        "description": "请配置您的红外窗帘控制器。您可以使用博联设备发送红外码。",
         "data": {
           "name": "窗帘名称",
           "open_code": "开启红外码",
           "close_code": "关闭红外码",
           "pause_code": "暂停红外码",
-          "close_time": "完全关闭时间（秒）"
+          "close_time": "完全关闭时间（秒）",
+          "broadlink_device": "博联设备（可选）",
+          "broadlink_type": "博联设备类型"
         }
       }
     },
