@@ -2,12 +2,12 @@
   "domain": "boardlink_curtain",
   "name": "Boardlink Curtain Control",
   "version": "1.0.0",
-  "documentation": "https://github.com/yourusername/boardlink-curtain",
-  "issue_tracker": "https://github.com/yourusername/boardlink-curtain/issues",
+  "documentation": "https://github.com/woooxxs/boardlink-curtain",
+  "issue_tracker": "https://github.com/woooxxs/boardlink-curtain/issues",
   "dependencies": [],
-  "codeowners": ["@yourusername"],
+  "codeowners": ["@woooxxs"],
   "requirements": [],
   "config_flow": true,
   "iot_class": "local_polling",
-  "logo": "https://github.com/yourusername/boardlink-curtain/raw/main/logo.png"
+  "logo": "https://raw.githubusercontent.com/woooxxs/boardlink-curtain/refs/heads/master/logo.svg"
 }
