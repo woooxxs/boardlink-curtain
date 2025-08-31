@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "配置博联窗帘控制",
+        "description": "请配置您的红外窗帘控制器",
+        "data": {
+          "name": "窗帘名称",
+          "open_code": "开启红外码",
+          "close_code": "关闭红外码",
+          "pause_code": "暂停红外码",
+          "close_time": "完全关闭时间（秒）"
+        }
+      }
+    },
+    "error": {
+      "unknown": "发生未知错误"
+    },
+    "abort": {
+      "already_configured": "该设备已配置"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "博联窗帘选项",
+        "description": "修改窗帘配置",
+        "data": {
+          "open_code": "开启红外码",
+          "close_code": "关闭红外码",
+          "pause_code": "暂停红外码",
+          "close_time": "完全关闭时间（秒）"
+        }
+      }
+    }
+  },
+  "entity": {
+    "cover": {
+      "boardlink_curtain": {
+        "state": {
+          "open": "开启",
+          "closed": "关闭",
+          "opening": "正在开启",
+          "closing": "正在关闭"
+        }
+      }
+    }
+  }
+}

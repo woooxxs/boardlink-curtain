@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Boardlink Curtain Control",
+        "description": "Please configure your IR curtain controller",
+        "data": {
+          "name": "Curtain Name",
+          "open_code": "Open IR Code",
+          "close_code": "Close IR Code",
+          "pause_code": "Pause IR Code",
+          "close_time": "Full Close Time (seconds)"
+        }
+      }
+    },
+    "error": {
+      "unknown": "An unknown error occurred"
+    },
+    "abort": {
+      "already_configured": "This device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Boardlink Curtain Options",
+        "description": "Modify curtain configuration",
+        "data": {
+          "open_code": "Open IR Code",
+          "close_code": "Close IR Code",
+          "pause_code": "Pause IR Code",
+          "close_time": "Full Close Time (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "cover": {
+      "boardlink_curtain": {
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "opening": "Opening",
+          "closing": "Closing"
+        }
+      }
+    }
+  }
+}

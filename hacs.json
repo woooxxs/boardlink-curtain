@@ -1,0 +1,6 @@
+{
+  "name": "Boardlink Curtain Control",
+  "hacs": "1.32.0",
+  "render_readme": true,
+  "filename": "boardlink_curtain.zip"
+}
