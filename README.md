@@ -2,6 +2,10 @@
 
 一个用于Home Assistant的HACS自定义组件，用于控制通过红外信号控制的窗帘。
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/woooxxs/boardlink-curtain?style=for-the-badge)](https://github.com/woooxxs/boardlink-curtain/releases)
+[![License](https://img.shields.io/github/license/woooxxs/boardlink-curtain?style=for-the-badge)](LICENSE)
+
 ## 功能特性
 
 - 🎯 支持开、关、暂停三个基本操作
@@ -12,18 +16,22 @@
 
 ## 安装
 
-### 通过HACS安装（推荐）
+### 一键添加到HACS（推荐）
 
-1. 打开HACS
-2. 点击"集成"
-3. 点击右下角的"+"号
-4. 搜索"Boardlink Curtain Control"
-5. 点击安装
+[![添加到HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=woooxxs&repository=boardlink-curtain&category=integration)
+
+点击上方按钮直接添加到HACS，或按照以下步骤手动添加：
+
+### 通过HACS安装
+
+1. 打开HACS → 集成 → 自定义仓库
+2. 添加仓库地址：`https://github.com/woooxxs/boardlink-curtain`
+3. 搜索"Boardlink Curtain Control"并安装
 
 ### 手动安装
 
-1. 下载`boardlink_curtain`文件夹
-2. 将其复制到`config/custom_components/`目录下
+1. 下载[最新版本](https://github.com/woooxxs/boardlink-curtain/releases/latest)
+2. 解压后将`custom_components/boardlink_curtain`文件夹复制到`config/custom_components/`目录下
 3. 重启Home Assistant
 
 ## 配置

@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release_zip:
+    runs-on: ubuntu-latest
+    name: Prepare release asset
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create zip
+        run: |
+          cd custom_components/boardlink_curtain
+          zip boardlink_curtain.zip -r ./
+
+      - name: Upload zip to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: custom_components/boardlink_curtain/boardlink_curtain.zip
+          asset_name: boardlink_curtain.zip
+          tag: ${{ github.ref }}
+          overwrite: true
