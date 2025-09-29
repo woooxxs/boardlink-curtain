@@ -1,0 +1,230 @@
+# 窗帘控制面板 - Lovelace配置
+# 将此配置添加到Home Assistant的仪表盘
+
+title: 窗帘控制中心
+icon: mdi:curtains
+path: curtain-control
+panel: true
+cards:
+  - type: vertical-stack
+    cards:
+      # 标题卡片
+      - type: markdown
+        content: |
+          # 🏠 智能窗帘控制系统
+          *基于Boardlink Curtain组件*
+
+      # 快速控制按钮
+      - type: horizontal-stack
+        title: 快速控制
+        cards:
+          - type: button
+            entity: cover.test_curtain
+            name: 完全打开
+            icon: mdi:curtains-open
+            tap_action:
+              action: call-service
+              service: cover.open_cover
+              service_data:
+                entity_id: cover.test_curtain
+            hold_action:
+              action: more-info
+
+          - type: button
+            entity: cover.test_curtain
+            name: 完全关闭
+            icon: mdi:curtains-closed
+            tap_action:
+              action: call-service
+              service: cover.close_cover
+              service_data:
+                entity_id: cover.test_curtain
+            hold_action:
+              action: more-info
+
+          - type: button
+            entity: cover.test_curtain
+            name: 停止运动
+            icon: mdi:stop-circle
+            tap_action:
+              action: call-service
+              service: cover.stop_cover
+              service_data:
+                entity_id: cover.test_curtain
+
+      # 位置滑块控制
+      - type: entities
+        title: 精确控制
+        entities:
+          - entity: cover.test_curtain
+            name: 窗帘主控
+            secondary_info: last-changed
+          - type: custom:slider-entity-row
+            entity: cover.test_curtain
+            name: 位置调节
+            hide_state: false
+
+      # 实时状态显示
+      - type: glance
+        title: 实时状态
+        entities:
+          - entity: cover.test_curtain
+            name: 状态
+          - entity: cover.test_curtain
+            attribute: current_position
+            name: 位置
+          - entity: cover.test_curtain
+            attribute: open_code
+            name: 打开码
+          - entity: cover.test_curtain
+            attribute: close_code
+            name: 关闭码
+
+      # 运动轨迹图表
+      - type: vertical-stack
+        title: 运动轨迹分析
+        cards:
+          - type: custom:apexcharts-card
+            card:
+              height: 200
+            header:
+              title: 实时位置轨迹
+              show: true
+            series:
+              - entity: cover.test_curtain
+                attribute: current_position
+                name: 窗帘位置
+                type: line
+                curve: smooth
+                stroke_width: 3
+                color: '#3498db'
+                unit: '%'
+            yaxis:
+              - min: 0
+                max: 100
+                decimals: 0
+                title:
+                  text: 位置百分比
+            xaxis:
+              type: datetime
+            realtime:
+              duration: 5m
+              refresh: 1s
+
+          - type: history-graph
+            title: 24小时运动轨迹
+            entities:
+              - entity: cover.test_curtain
+                attribute: current_position
+            hours_to_show: 24
+            refresh_interval: 30
+
+      # 位置仪表盘
+      - type: gauge
+        entity: cover.test_curtain
+        attribute: current_position
+        name: 窗帘开合度
+        min: 0
+        max: 100
+        unit: '%'
+        needle: true
+        severity:
+          green: 0
+          yellow: 50
+          red: 100
+        card:
+          height: 200
+
+      # 运动统计
+      - type: statistics-graph
+        title: 运动统计
+        entities:
+          - entity: cover.test_curtain
+            attribute: current_position
+        chart_type: bar
+        period: hour
+        days_to_show: 7
+        stat_types:
+          - mean
+          - max
+          - min
+
+      # 场景预设
+      - type: vertical-stack
+        title: 场景预设
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: 早安模式
+                icon: mdi:weather-sunny
+                tap_action:
+                  action: call-service
+                  service: cover.set_cover_position
+                  service_data:
+                    entity_id: cover.test_curtain
+                    position: 80
+
+              - type: button
+                name: 午休模式
+                icon: mdi:bed
+                tap_action:
+                  action: call-service
+                  service: cover.set_cover_position
+                  service_data:
+                    entity_id: cover.test_curtain
+                    position: 30
+
+              - type: button
+                name: 夜晚模式
+                icon: mdi:weather-night
+                tap_action:
+                  action: call-service
+                  service: cover.set_cover_position
+                  service_data:
+                    entity_id: cover.test_curtain
+                    position: 0
+
+              - type: button
+                name: 阅读模式
+                icon: mdi:book-open
+                tap_action:
+                  action: call-service
+                  service: cover.set_cover_position
+                  service_data:
+                    entity_id: cover.test_curtain
+                    position: 60
+
+      # 红外码显示
+      - type: entities
+        title: 红外码配置
+        entities:
+          - type: markdown
+            content: |
+              **当前配置的红外码:**
+              - **打开码**: `send_open`
+              - **关闭码**: `send_close`
+              - **停止码**: `send_stop`
+              
+              *这些码用于模拟测试，实际使用时替换为真实的红外码*
+
+      # 调试信息
+      - type: entity-filter
+        title: 调试信息
+        show_empty: false
+        entities:
+          - entity: cover.test_curtain
+        state_filter:
+          - 'open'
+          - 'closed'
+          - 'opening'
+          - 'closing'
+        card:
+          type: glance
+          show_state: true
+          show_icon: true
+
+# 自定义卡片配置（需要安装相关插件）
+# 1. apexcharts-card: https://github.com/RomRider/apexcharts-card
+# 2. slider-entity-row: https://github.com/thomasloven/lovelace-slider-entity-row
+# 3. button-card: https://github.com/custom-cards/button-card

@@ -1,0 +1,139 @@
+# 测试用Home Assistant配置 - 包含窗帘运动轨迹显示
+
+# 基本配置
+homeassistant:
+  name: Boardlink Curtain Test
+  latitude: 39.9042
+  longitude: 116.4074
+  elevation: 0
+  unit_system: metric
+  time_zone: Asia/Shanghai
+
+# 前端配置
+frontend:
+  themes: !include_dir_merge_named themes
+
+# 日志配置
+logger:
+  default: warning
+  logs:
+    custom_components.boardlink_curtain: debug
+    homeassistant.components.cover: debug
+
+# 模拟一些测试设备
+input_boolean:
+  mock_broadlink_device:
+    name: Mock Broadlink RM Mini 3
+    initial: false
+
+# 模拟脚本
+script:
+  mock_send_ir:
+    sequence:
+      - service: system_log.write
+        data:
+          message: "Mock IR code sent: {{ code }}"
+          level: info
+
+# 测试用自动化
+automation:
+  - alias: "测试窗帘状态变化"
+    trigger:
+      - platform: state
+        entity_id: cover.test_curtain
+    action:
+      - service: system_log.write
+        data:
+          message: "Curtain state changed to: {{ trigger.to_state.state }}"
+          level: info
+
+# 预配置Boardlink Curtain集成
+boardlink_curtain:
+  - name: "测试窗帘"
+    open_code: "send_open"
+    close_code: "send_close"
+    pause_code: "send_stop"
+    close_time: 30
+
+# 首页仪表盘配置
+lovelace:
+  dashboards:
+    default:
+      mode: storage
+      title: 智能家居控制中心
+      icon: mdi:home
+      show_in_sidebar: true
+      views:
+        - path: default_view
+          title: 首页
+          type: panel
+          cards:
+            - type: vertical-stack
+              cards:
+                - type: horizontal-stack
+                  cards:
+                    - type: entity-button
+                      entity: cover.test_curtain
+                      name: 打开窗帘
+                      tap_action:
+                        action: call-service
+                        service: cover.open_cover
+                        service_data:
+                          entity_id: cover.test_curtain
+                    - type: entity-button
+                      entity: cover.test_curtain
+                      name: 关闭窗帘
+                      tap_action:
+                        action: call-service
+                        service: cover.close_cover
+                        service_data:
+                          entity_id: cover.test_curtain
+                    - type: entity-button
+                      entity: cover.test_curtain
+                      name: 停止窗帘
+                      tap_action:
+                        action: call-service
+                        service: cover.stop_cover
+                        service_data:
+                          entity_id: cover.test_curtain
+
+                - type: entities
+                  title: 窗帘状态
+                  entities:
+                    - entity: cover.test_curtain
+                    - type: attribute
+                      entity: cover.test_curtain
+                      attribute: current_position
+                      name: 当前位置
+                    - type: attribute
+                      entity: cover.test_curtain
+                      attribute: open_code
+                      name: 打开红外码
+                    - type: attribute
+                      entity: cover.test_curtain
+                      attribute: close_code
+                      name: 关闭红外码
+                    - type: attribute
+                      entity: cover.test_curtain
+                      attribute: pause_code
+                      name: 停止红外码
+
+                - type: history-graph
+                  entities:
+                    - entity: cover.test_curtain
+                      attribute: current_position
+                  hours_to_show: 24
+                  refresh_interval: 30
+                  title: 窗帘位置历史轨迹
+
+                - type: gauge
+                  entity: cover.test_curtain
+                  attribute: current_position
+                  name: 窗帘开合度
+                  min: 0
+                  max: 100
+                  severity:
+                    green: 0
+                    yellow: 50
+                    red: 100
+

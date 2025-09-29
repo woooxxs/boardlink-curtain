@@ -1,0 +1,13 @@
+services:
+  homeassistant:
+    image: docker.1ms.run/homeassistant/home-assistant:latest
+    container_name: ha_boardlink_test
+    volumes:
+      - ./test_config:/config
+      - ./custom_components/boardlink_curtain:/config/custom_components/boardlink_curtain
+    ports:
+      - "8123:8123"
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    privileged: false
