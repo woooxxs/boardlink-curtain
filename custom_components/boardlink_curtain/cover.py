@@ -202,6 +202,22 @@ class BoardlinkCurtain(CoverEntity, RestoreEntity):
 
     async def _send_ir_code(self, code: str) -> None:
         """发送红外码到Broadlink设备."""
+        # 检查是否为特殊的测试命令
+        if code in ["send_open", "send_close", "send_stop"]:
+            # 对于特殊测试命令，只输出日志，不尝试发送
+            _LOGGER.info("执行测试命令: %s (以日志形式替代实际红外码发送)", code)
+            
+            # 根据命令类型输出更详细的日志
+            if code == "send_open":
+                _LOGGER.info("窗帘[%s]接收到打开命令，模拟开启动作...", self.name)
+            elif code == "send_close":
+                _LOGGER.info("窗帘[%s]接收到关闭命令，模拟关闭动作...", self.name)
+            elif code == "send_stop":
+                _LOGGER.info("窗帘[%s]接收到停止命令，模拟停止动作...", self.name)
+            
+            await asyncio.sleep(0.5)  # 模拟命令执行时间
+            return
+
         try:
             # 尝试通过Broadlink服务发送红外码
             if self._broadlink_device:
