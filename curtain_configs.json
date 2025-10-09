@@ -1,0 +1,30 @@
+[
+  {
+    "name": "客厅窗帘",
+    "open_code": "living_room_open",
+    "close_code": "living_room_close",
+    "pause_code": "living_room_stop",
+    "close_time": 30
+  },
+  {
+    "name": "卧室窗帘",
+    "open_code": "bedroom_open",
+    "close_code": "bedroom_close",
+    "pause_code": "bedroom_stop",
+    "close_time": 25
+  },
+  {
+    "name": "书房窗帘",
+    "open_code": "study_room_open",
+    "close_code": "study_room_close",
+    "pause_code": "study_room_stop",
+    "close_time": 20
+  },
+  {
+    "name": "餐厅窗帘",
+    "open_code": "dining_room_open",
+    "close_code": "dining_room_close",
+    "pause_code": "dining_room_stop",
+    "close_time": 35
+  }
+]

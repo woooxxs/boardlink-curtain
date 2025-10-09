@@ -1,54 +1,25 @@
-"""Config flow for Boardlink Curtain."""
-from __future__ import annotations
-
+"""Config flow for Boardlink Curtain integration."""
 import logging
 from typing import Any
-
 import voluptuous as vol
+
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
 
 from .const import (
-    CONF_BROADLINK_DEVICE,
-    CONF_BROADLINK_TYPE,
     CONF_CLOSE_CODE,
     CONF_CLOSE_TIME,
     CONF_OPEN_CODE,
     CONF_PAUSE_CODE,
     DEFAULT_CLOSE_TIME,
     DOMAIN,
-    BROADLINK_TYPES,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_NAME): str,
-        vol.Required(CONF_OPEN_CODE): str,
-        vol.Required(CONF_CLOSE_CODE): str,
-        vol.Required(CONF_PAUSE_CODE): str,
-        vol.Optional(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): vol.Coerce(int),
-        vol.Optional(CONF_BROADLINK_DEVICE): str,
-        vol.Optional(CONF_BROADLINK_TYPE, default="RM_MINI3"): vol.In(BROADLINK_TYPES),
-    }
-)
 
-
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
-
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
-    # 这里可以添加验证逻辑，比如检查代码格式等
-    return {"title": data[CONF_NAME]}
-
-
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class BoardlinkCurtainConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Boardlink Curtain."""
 
     VERSION = 1
@@ -57,51 +28,102 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle the initial step."""
-        errors: dict[str, str] = {}
+        errors = {}
+
         if user_input is not None:
-            try:
-                info = await validate_input(self.hass, user_input)
-            except HomeAssistantError:
-                errors["base"] = "unknown"
-            else:
-                await self.async_set_unique_id(user_input[CONF_NAME])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(title=info["title"], data=user_input)
+            # 验证输入
+            if not user_input.get("name"):
+                errors["name"] = "名称不能为空"
+            elif not user_input.get(CONF_OPEN_CODE):
+                errors["open_code"] = "开帘红外码不能为空"
+            elif not user_input.get(CONF_CLOSE_CODE):
+                errors["close_code"] = "关帘红外码不能为空"
+            elif not user_input.get(CONF_PAUSE_CODE):
+                errors["pause_code"] = "暂停红外码不能为空"
+            
+            if not errors:
+                # 检查设备名称是否已存在
+                existing_entries = self.hass.config_entries.async_entries(DOMAIN)
+                if any(entry.title == user_input["name"] for entry in existing_entries):
+                    errors["name"] = "该设备名称已存在"
+                else:
+                    # 创建配置项
+                    return self.async_create_entry(
+                        title=user_input["name"],
+                        data=user_input,
+                    )
 
-        # 获取可用的Broadlink设备
-        device_registry = dr.async_get(self.hass)
-        broadlink_devices = []
-        for device in device_registry.devices.values():
-            if any("broadlink" in str(identifier).lower() for identifier in device.identifiers):
-                device_name = next(iter(device.identifiers))[1] if device.identifiers else str(device.id)
-                broadlink_devices.append(device_name)
-
-        # 如果没有找到Broadlink设备，提供手动输入选项
-        if not broadlink_devices:
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_NAME): str,
-                    vol.Required(CONF_OPEN_CODE): str,
-                    vol.Required(CONF_CLOSE_CODE): str,
-                    vol.Required(CONF_PAUSE_CODE): str,
-                    vol.Optional(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): vol.Coerce(int),
-                    vol.Optional(CONF_BROADLINK_DEVICE): str,
-                    vol.Optional(CONF_BROADLINK_TYPE, default="RM_MINI3"): vol.In(BROADLINK_TYPES),
-                }
-            )
-        else:
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_NAME): str,
-                    vol.Required(CONF_OPEN_CODE): str,
-                    vol.Required(CONF_CLOSE_CODE): str,
-                    vol.Required(CONF_PAUSE_CODE): str,
-                    vol.Optional(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): vol.Coerce(int),
-                    vol.Optional(CONF_BROADLINK_DEVICE): vol.In(broadlink_devices),
-                    vol.Optional(CONF_BROADLINK_TYPE, default="RM_MINI3"): vol.In(BROADLINK_TYPES),
-                }
-            )
+        # 默认值
+        data_schema = vol.Schema({
+            vol.Required("name", default="窗帘"): str,
+            vol.Required(CONF_OPEN_CODE, default="send_open"): str,
+            vol.Required(CONF_CLOSE_CODE, default="send_close"): str,
+            vol.Required(CONF_PAUSE_CODE, default="send_stop"): str,
+            vol.Required(CONF_CLOSE_TIME, default=DEFAULT_CLOSE_TIME): int,
+        })
 
         return self.async_show_form(
-            step_id="user", data_schema=schema, errors=errors
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+        )
+
+    async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
+        """Handle import from YAML configuration."""
+        return await self.async_step_user(import_data)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Create the options flow."""
+        return BoardlinkCurtainOptionsFlowHandler(config_entry)
+
+
+class BoardlinkCurtainOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for Boardlink Curtain."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        errors = {}
+
+        if user_input is not None:
+            # 验证输入
+            if not user_input.get(CONF_OPEN_CODE):
+                errors["open_code"] = "开帘红外码不能为空"
+            elif not user_input.get(CONF_CLOSE_CODE):
+                errors["close_code"] = "关帘红外码不能为空"
+            elif not user_input.get(CONF_PAUSE_CODE):
+                errors["pause_code"] = "暂停红外码不能为空"
+            
+            if not errors:
+                # 更新配置项
+                return self.async_create_entry(
+                    title="",
+                    data=user_input,
+                )
+
+        # 获取当前配置
+        current_data = self.config_entry.data
+
+        # 默认值
+        data_schema = vol.Schema({
+            vol.Required("name", default=current_data.get("name", "窗帘")): str,
+            vol.Required(CONF_OPEN_CODE, default=current_data.get(CONF_OPEN_CODE, "send_open")): str,
+            vol.Required(CONF_CLOSE_CODE, default=current_data.get(CONF_CLOSE_CODE, "send_close")): str,
+            vol.Required(CONF_PAUSE_CODE, default=current_data.get(CONF_PAUSE_CODE, "send_stop")): str,
+            vol.Required(CONF_CLOSE_TIME, default=current_data.get(CONF_CLOSE_TIME, DEFAULT_CLOSE_TIME)): int,
+        })
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=data_schema,
+            errors=errors,
         )

@@ -1,13 +1,12 @@
 {
   "domain": "boardlink_curtain",
-  "name": "Boardlink Curtain Control",
-  "version": "1.0.0",
-  "documentation": "https://github.com/woooxxs/boardlink-curtain",
-  "issue_tracker": "https://github.com/woooxxs/boardlink-curtain/issues",
-  "dependencies": ["broadlink"],
-  "codeowners": ["@woooxxs"],
-  "requirements": ["broadlink==0.18.3"],
+  "name": "Boardlink Curtain",
+  "codeowners": ["@zhengyulin"],
   "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://www.home-assistant.io/integrations/boardlink_curtain",
   "iot_class": "local_polling",
-  "logo": "https://raw.githubusercontent.com/woooxxs/boardlink-curtain/refs/heads/master/logo.svg"
+  "issue_tracker": "https://github.com/zhengyulin/homeassistant-boardlink-curtain/issues",
+  "requirements": [],
+  "version": "1.0.0"
 }

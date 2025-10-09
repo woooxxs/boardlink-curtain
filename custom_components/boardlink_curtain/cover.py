@@ -1,9 +1,8 @@
-"""Support for Boardlink Curtain devices."""
-from __future__ import annotations
-
+"""Support for Boardlink curtain."""
 import asyncio
 import logging
-from typing import Any
+import time
+from typing import Any, Final
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -11,265 +10,349 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
-    CONF_BROADLINK_DEVICE,
-    CONF_BROADLINK_TYPE,
     CONF_CLOSE_CODE,
     CONF_CLOSE_TIME,
     CONF_OPEN_CODE,
     CONF_PAUSE_CODE,
+    DEFAULT_CLOSE_TIME,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+# 窗帘状态常量
+CURTAIN_OPEN: Final = 100  # 完全开启 100%
+CURTAIN_CLOSE: Final = 0  # 完全关闭 0%
+
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the Boardlink Curtain cover."""
-    data = config_entry.data
+    """Set up Boardlink curtain from a config entry."""
+    # 从配置项获取配置数据
+    config = hass.data[DOMAIN][entry.entry_id]
     
-    async_add_entities(
-        [
-            BoardlinkCurtain(
-                name=data[CONF_NAME],
-                open_code=data[CONF_OPEN_CODE],
-                close_code=data[CONF_CLOSE_CODE],
-                pause_code=data[CONF_PAUSE_CODE],
-                close_time=data.get(CONF_CLOSE_TIME, 30),
-                broadlink_device=data.get(CONF_BROADLINK_DEVICE),
-                broadlink_type=data.get(CONF_BROADLINK_TYPE, "RM_MINI3"),
-                unique_id=config_entry.entry_id,
-                hass=hass,
-            )
-        ]
+    # 创建窗帘实体
+    curtain = BoardlinkCurtain(
+        config,
+        entry.entry_id,
     )
+    
+    async_add_entities([curtain])
 
 
-class BoardlinkCurtain(CoverEntity, RestoreEntity):
-    """Representation of a Boardlink Curtain."""
-
+class BoardlinkCurtain(CoverEntity):
+    """Representation of a Boardlink curtain."""
+    
+    _attr_should_poll = False
     _attr_supported_features = (
         CoverEntityFeature.OPEN
         | CoverEntityFeature.CLOSE
-        | CoverEntityFeature.STOP
         | CoverEntityFeature.SET_POSITION
+        | CoverEntityFeature.STOP
     )
 
     def __init__(
         self,
-        name: str,
-        open_code: str,
-        close_code: str,
-        pause_code: str,
-        close_time: int,
-        broadlink_device: str,
-        broadlink_type: str,
-        unique_id: str,
-        hass: HomeAssistant,
+        config: dict[str, Any],
+        entry_id: str,
     ) -> None:
         """Initialize the curtain."""
-        self._attr_name = name
-        self._attr_unique_id = unique_id
-        self._open_code = open_code
-        self._close_code = close_code
-        self._pause_code = pause_code
-        self._close_time = close_time  # 完全关闭所需时间（秒）
-        self._broadlink_device = broadlink_device
-        self._broadlink_type = broadlink_type
-        self._hass = hass
+        self._config = config
+        self._entry_id = entry_id
         
-        # 0% = 完全开启, 100% = 完全关闭
-        self._attr_current_cover_position = 0
+        # 从配置中获取参数
+        self._open_code = config.get(CONF_OPEN_CODE)
+        self._close_code = config.get(CONF_CLOSE_CODE)
+        self._pause_code = config.get(CONF_PAUSE_CODE)
+        self._close_time = config.get(CONF_CLOSE_TIME, DEFAULT_CLOSE_TIME)
+        
+        # 实体属性
+        self._attr_name = config.get("name", "Boardlink Curtain")
+        self._attr_unique_id = entry_id
+        
+        # 状态属性
+        self._attr_current_cover_position = CURTAIN_OPEN
         self._attr_is_closed = False
-        self._attr_is_closing = False
-        self._attr_is_opening = False
+        self._last_operation_start_time = None
+        self._expected_end_time = None
+        self._target_position = None
         
-        # 用于模拟运动的任务
-        self._movement_task: asyncio.Task | None = None
+        # 逐步更新位置的属性
+        self._update_position_task = None
+        self._is_moving = False
 
-    async def async_added_to_hass(self) -> None:
-        """Call when entity about to be added to hass."""
-        await super().async_added_to_hass()
-        
-        # 恢复之前的状态
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.attributes.get(ATTR_POSITION) is not None:
-                self._attr_current_cover_position = last_state.attributes[ATTR_POSITION]
-                self._attr_is_closed = self._attr_current_cover_position == 100
+    async def _send_ir_code(self, code: str) -> None:
+        """Send IR code to the curtain."""
+        if code:
+            _LOGGER.info("Sending IR code for curtain %s: %s", self._attr_name, code)
+            # 使用模拟脚本服务发送红外指令
+            try:
+                # 调用script.mock_send_ir服务发送红外指令
+                await self.hass.services.async_call(
+                    "script",
+                    "mock_send_ir",
+                    {
+                        "code": code
+                    },
+                    blocking=False
+                )
+                _LOGGER.info("Successfully sent IR code: %s", code)
+            except Exception as e:
+                _LOGGER.error("Failed to send IR code %s: %s", code, str(e))
+        else:
+            _LOGGER.warning("No IR code configured for curtain %s", self._attr_name)
 
     async def async_open_cover(self, **kwargs: Any) -> None:
-        """Open the cover."""
-        if self._movement_task:
-            self._movement_task.cancel()
-            
-        _LOGGER.info(f"Opening curtain {self.name} with code: {self._open_code}")
+        """Open the curtain."""
+        _LOGGER.info("Opening curtain %s with code: %s", self._attr_name, self._open_code)
         
-        # 这里可以添加发送红外码的逻辑
+        # 发送开启指令
         await self._send_ir_code(self._open_code)
         
-        # 模拟开启过程
-        self._attr_is_opening = True
-        self._attr_is_closing = False
+        # 记录开始时间和目标时间
+        self._last_operation_start_time = time.time()
+        self._target_position = CURTAIN_OPEN
+        
+        # 计算运行时间
+        current_position = self._attr_current_cover_position
+        if current_position != CURTAIN_OPEN:
+            # 计算需要运行的时间（秒）
+            position_diff = abs(CURTAIN_OPEN - current_position)
+            run_time = (position_diff / 100.0) * self._close_time
+            self._expected_end_time = self._last_operation_start_time + run_time
+            _LOGGER.info("Curtain %s will run for %.1f seconds to reach fully open position", self._attr_name, run_time)
+        
+        # 更新状态
+        self._attr_current_cover_position = CURTAIN_OPEN
+        self._attr_is_closed = False
         self.async_write_ha_state()
         
-        # 计算开启时间：根据当前位置到0%的距离
-        open_time = (self._attr_current_cover_position / 100) * self._close_time
-        
-        self._movement_task = asyncio.create_task(
-            self._simulate_movement(0, open_time)
-        )
+        _LOGGER.info("Curtain %s is now fully open (position: %d%%)", self._attr_name, CURTAIN_OPEN)
 
     async def async_close_cover(self, **kwargs: Any) -> None:
-        """Close the cover."""
-        if self._movement_task:
-            self._movement_task.cancel()
-            
-        _LOGGER.info(f"Closing curtain {self.name} with code: {self._close_code}")
+        """Close the curtain."""
+        _LOGGER.info("Closing curtain %s with code: %s", self._attr_name, self._close_code)
         
-        # 这里可以添加发送红外码的逻辑
+        # 发送关闭指令
         await self._send_ir_code(self._close_code)
         
-        # 模拟关闭过程
-        self._attr_is_closing = True
-        self._attr_is_opening = False
+        # 记录开始时间和目标时间
+        self._last_operation_start_time = time.time()
+        self._target_position = CURTAIN_CLOSE
+        
+        # 计算运行时间
+        current_position = self._attr_current_cover_position
+        if current_position != CURTAIN_CLOSE:
+            # 计算需要运行的时间（秒）
+            position_diff = abs(CURTAIN_CLOSE - current_position)
+            run_time = (position_diff / 100.0) * self._close_time
+            self._expected_end_time = self._last_operation_start_time + run_time
+            _LOGGER.info("Curtain %s will run for %.1f seconds to reach fully closed position", self._attr_name, run_time)
+        
+        # 更新状态
+        self._attr_current_cover_position = CURTAIN_CLOSE
+        self._attr_is_closed = True
         self.async_write_ha_state()
         
-        # 计算关闭时间：根据当前位置到100%的距离
-        close_time = ((100 - self._attr_current_cover_position) / 100) * self._close_time
-        
-        self._movement_task = asyncio.create_task(
-            self._simulate_movement(100, close_time)
-        )
+        _LOGGER.info("Curtain %s is now fully closed (position: %d%%)", self._attr_name, CURTAIN_CLOSE)
+
+    async def _update_position_during_movement(self, start_position: int, target_position: int, run_time: float) -> None:
+        """在窗帘移动过程中逐步更新位置值。"""
+        try:
+            _LOGGER.info("Starting position update from %d%% to %d%% over %.1f seconds", 
+                        start_position, target_position, run_time)
+            
+            # 计算每秒位置变化
+            position_diff = target_position - start_position
+            start_time = time.time()
+            
+            # 每0.5秒更新一次位置
+            update_interval = 0.5
+            steps = int(run_time / update_interval)
+            
+            if steps <= 0:
+                steps = 1
+                
+            position_step = position_diff / steps
+            
+            for i in range(steps):
+                # 检查是否被取消
+                if not self._is_moving:
+                    break
+                    
+                # 等待更新间隔
+                await asyncio.sleep(update_interval)
+                
+                # 计算新位置
+                elapsed_time = time.time() - start_time
+                if elapsed_time >= run_time:
+                    new_position = target_position
+                else:
+                    # 根据时间计算位置
+                    progress = elapsed_time / run_time
+                    new_position = int(start_position + position_diff * progress)
+                
+                # 确保位置在有效范围内
+                new_position = max(0, min(100, new_position))
+                
+                # 更新位置
+                self._attr_current_cover_position = new_position
+                self._attr_is_closed = new_position == CURTAIN_CLOSE
+                self.async_write_ha_state()
+                
+                _LOGGER.info("Curtain %s position updated to: %d%% (step %d/%d)", 
+                            self._attr_name, new_position, i+1, steps)
+                
+                # 如果已达到目标位置，退出循环
+                if new_position == target_position:
+                    break
+                    
+            # 确保最终位置正确
+            self._attr_current_cover_position = target_position
+            self._attr_is_closed = target_position == CURTAIN_CLOSE
+            self.async_write_ha_state()
+            
+            # 清理状态
+            self._is_moving = False
+            self._update_position_task = None
+            
+            _LOGGER.info("Curtain %s finished moving to target position: %d%%", 
+                        self._attr_name, target_position)
+                        
+        except asyncio.CancelledError:
+            _LOGGER.info("Position update task for curtain %s was cancelled", self._attr_name)
+            self._is_moving = False
+            self._update_position_task = None
+        except Exception as e:
+            _LOGGER.error("Error updating position for curtain %s: %s", self._attr_name, str(e))
+            self._is_moving = False
+            self._update_position_task = None
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
-        """Stop the cover."""
-        if self._movement_task:
-            self._movement_task.cancel()
-            self._movement_task = None
-            
-        _LOGGER.info(f"Stopping curtain {self.name} with code: {self._pause_code}")
+        """Stop the curtain."""
+        _LOGGER.info("Stopping curtain %s with code: %s", self._attr_name, self._pause_code)
         
-        # 发送暂停码
+        # 发送暂停指令
         await self._send_ir_code(self._pause_code)
         
-        self._attr_is_opening = False
-        self._attr_is_closing = False
+        # 停止位置更新任务
+        if self._update_position_task:
+            self._update_position_task.cancel()
+            try:
+                await self._update_position_task
+            except asyncio.CancelledError:
+                pass
+            self._update_position_task = None
+            
+        # 记录停止时的位置
+        current_position = self._attr_current_cover_position
+        _LOGGER.info("Curtain %s stopped at position: %d%%", self._attr_name, current_position)
+        
+        # 清除操作计时器
+        self._last_operation_start_time = None
+        self._expected_end_time = None
+        self._target_position = None
+        self._is_moving = False
+        
+        # 状态保持不变，仅停止动作
         self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
-        """Move the cover to a specific position."""
+        """Move the curtain to a specific position."""
         position = kwargs[ATTR_POSITION]
+        _LOGGER.info("Setting curtain %s position to: %d%%", self._attr_name, position)
         
-        if self._movement_task:
-            self._movement_task.cancel()
+        # 如果正在移动，先取消之前的任务
+        if self._update_position_task:
+            self._update_position_task.cancel()
+            try:
+                await self._update_position_task
+            except asyncio.CancelledError:
+                pass
+            self._update_position_task = None
             
-        current_pos = self._attr_current_cover_position
-        target_pos = position
+        # 记录目标位置
+        self._target_position = position
+        self._is_moving = True
         
-        if target_pos > current_pos:
-            # 需要关闭更多
-            _LOGGER.info(f"Closing curtain {self.name} to {target_pos}%")
-            await self._send_ir_code(self._close_code)
-            self._attr_is_closing = True
-            self._attr_is_opening = False
-        elif target_pos < current_pos:
-            # 需要开启更多
-            _LOGGER.info(f"Opening curtain {self.name} to {target_pos}%")
+        # 根据位置发送相应的指令
+        if position == CURTAIN_OPEN:
+            # 发送开启指令
             await self._send_ir_code(self._open_code)
-            self._attr_is_opening = True
-            self._attr_is_closing = False
+            # 记录开始时间和目标时间
+            self._last_operation_start_time = time.time()
+            # 计算运行时间
+            current_position = self._attr_current_cover_position
+            if current_position != position:
+                # 计算需要运行的时间（秒）
+                position_diff = abs(position - current_position)
+                run_time = (position_diff / 100.0) * self._close_time
+                self._expected_end_time = self._last_operation_start_time + run_time
+                _LOGGER.info("Curtain %s will run for %.1f seconds to reach position %d%%", self._attr_name, run_time, position)
+                # 启动位置更新任务
+                self._update_position_task = self.hass.async_create_task(self._update_position_during_movement(current_position, position, run_time))
+        elif position == CURTAIN_CLOSE:
+            # 发送关闭指令
+            await self._send_ir_code(self._close_code)
+            # 记录开始时间和目标时间
+            self._last_operation_start_time = time.time()
+            # 计算运行时间
+            current_position = self._attr_current_cover_position
+            if current_position != position:
+                # 计算需要运行的时间（秒）
+                position_diff = abs(position - current_position)
+                run_time = (position_diff / 100.0) * self._close_time
+                self._expected_end_time = self._last_operation_start_time + run_time
+                _LOGGER.info("Curtain %s will run for %.1f seconds to reach position %d%%", self._attr_name, run_time, position)
+                # 启动位置更新任务
+                self._update_position_task = self.hass.async_create_task(self._update_position_during_movement(current_position, position, run_time))
         else:
-            return
+            # 对于中间位置，需要特殊的处理方式
+            _LOGGER.info("Setting curtain %s to intermediate position: %d%%", self._attr_name, position)
+            # 计算需要运行的时间（秒）
+            current_position = self._attr_current_cover_position
+            position_diff = abs(position - current_position)
+            run_time = (position_diff / 100.0) * self._close_time
             
-        self.async_write_ha_state()
-        
-        # 计算移动时间
-        distance = abs(target_pos - current_pos)
-        move_time = (distance / 100) * self._close_time
-        
-        self._movement_task = asyncio.create_task(
-            self._simulate_movement(target_pos, move_time)
-        )
-
-    async def _send_ir_code(self, code: str) -> None:
-        """发送红外码到Broadlink设备."""
-        # 检查是否为特殊的测试命令
-        if code in ["send_open", "send_close", "send_stop"]:
-            # 对于特殊测试命令，只输出日志，不尝试发送
-            _LOGGER.info("执行测试命令: %s (以日志形式替代实际红外码发送)", code)
-            
-            # 根据命令类型输出更详细的日志
-            if code == "send_open":
-                _LOGGER.info("窗帘[%s]接收到打开命令，模拟开启动作...", self.name)
-            elif code == "send_close":
-                _LOGGER.info("窗帘[%s]接收到关闭命令，模拟关闭动作...", self.name)
-            elif code == "send_stop":
-                _LOGGER.info("窗帘[%s]接收到停止命令，模拟停止动作...", self.name)
-            
-            await asyncio.sleep(0.5)  # 模拟命令执行时间
-            return
-
-        try:
-            # 尝试通过Broadlink服务发送红外码
-            if self._broadlink_device:
-                service_data = {
-                    "entity_id": f"remote.{self._broadlink_device}",
-                    "command": code
-                }
-                
-                await self._hass.services.async_call(
-                    "remote", "send_command", service_data, blocking=True
-                )
-                _LOGGER.info("Sent IR code via Broadlink: %s", code)
+            # 确定运行方向
+            if position > current_position:
+                # 需要开启窗帘
+                await self._send_ir_code(self._open_code)
+                _LOGGER.info("Opening curtain %s to reach position %d%%", self._attr_name, position)
             else:
-                # 如果没有配置Broadlink设备，记录日志
-                _LOGGER.warning("No Broadlink device configured, simulating IR code: %s", code)
-                await asyncio.sleep(0.5)
+                # 需要关闭窗帘
+                await self._send_ir_code(self._close_code)
+                _LOGGER.info("Closing curtain %s to reach position %d%%", self._attr_name, position)
                 
-        except Exception as e:
-            _LOGGER.error("Failed to send IR code via Broadlink: %s", e)
-            # 回退到模拟模式
-            _LOGGER.debug("Falling back to simulation for IR code: %s", code)
-            await asyncio.sleep(0.5)
-
-    async def _simulate_movement(self, target_position: int, duration: float) -> None:
-        """模拟窗帘移动过程."""
-        if duration <= 0:
-            return
+            # 记录开始时间和目标时间
+            self._last_operation_start_time = time.time()
+            self._expected_end_time = self._last_operation_start_time + run_time
             
-        steps = max(10, int(duration * 2))  # 每0.5秒更新一次
-        step_duration = duration / steps
-        step_size = (target_position - self._attr_current_cover_position) / steps
-        
-        try:
-            for _ in range(steps):
-                await asyncio.sleep(step_duration)
-                self._attr_current_cover_position += step_size
-                self._attr_current_cover_position = max(0, min(100, self._attr_current_cover_position))
-                
-                # 更新状态
-                self._attr_is_closed = self._attr_current_cover_position >= 99
-                self.async_write_ha_state()
-                
-            # 移动完成
-            self._attr_current_cover_position = target_position
-            self._attr_is_opening = False
-            self._attr_is_closing = False
-            self._attr_is_closed = self._attr_current_cover_position >= 99
-            self.async_write_ha_state()
+            _LOGGER.info("Curtain %s will run for %.1f seconds to reach intermediate position %d%%", self._attr_name, run_time, position)
             
-        except asyncio.CancelledError:
-            # 移动被中断
-            _LOGGER.debug(f"Curtain movement cancelled at {self._attr_current_cover_position}%")
-            self._attr_is_opening = False
-            self._attr_is_closing = False
+            # 启动位置更新任务
+            self._update_position_task = self.hass.async_create_task(self._update_position_during_movement(current_position, position, run_time))
+            
+            # 调度停止操作
+            if run_time > 0:
+                # 使用异步延迟来调度停止操作
+                async def _scheduled_stop():
+                    await asyncio.sleep(run_time)
+                    await self.async_stop_cover()
+                    _LOGGER.info("Curtain %s reached target position: %d%%", self._attr_name, position)
+                
+                # 启动异步任务
+                self.hass.async_create_task(_scheduled_stop())
+                
+        # 更新状态（对于完全开启和完全关闭的情况，或者作为中间位置的初始状态）
+        # 注意：在逐步更新模式下，位置会在_update_position_during_movement中更新
+        if not self._update_position_task:
+            self._attr_current_cover_position = position
+            self._attr_is_closed = position == CURTAIN_CLOSE
             self.async_write_ha_state()
+            _LOGGER.info("Curtain %s target position set to: %d%%", self._attr_name, position)
